@@ -1,0 +1,471 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anubis 2.0 EVO Workout Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body{background:#020617;color:#f1f5f9;font-family:Arial,Helvetica,sans-serif}
+.checked-row{background-color:rgba(16,185,129,.15)!important;border-color:rgba(16,185,129,.4)!important}
+.checked-row .set-label{color:#34d399}
+input[type=number]{appearance:textfield;-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+button:focus-visible,input:focus-visible{outline:2px solid #34d399;outline-offset:2px}
+.day-card{border:1px solid #1e293b;border-radius:16px;overflow:hidden;background:#0f172a}
+.day-header{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;text-align:left;background:#0f172a}
+.day-header:hover{background:#172033}
+.day-body{padding:14px;border-top:1px solid #1e293b;background:rgba(15,23,42,.7)}
+.exercise-card{padding:13px;background:rgba(2,6,23,.65);border:1px solid #1e293b;border-radius:12px;margin-bottom:16px}
+.set-row{display:flex;align-items:center;gap:8px;padding:8px;margin-top:7px;background:#111827;border:1px solid #293548;border-radius:8px;transition:background .2s}
+.set-input{width:65px;min-width:0;padding:8px 4px;text-align:center;color:#f1f5f9;background:#020617;border:1px solid #334155;border-radius:6px;font-size:13px}
+.reps-input{width:58px}
+.set-label{width:40px;flex-shrink:0;font-size:11px;color:#94a3b8;font-weight:bold}
+.set-check{width:19px;height:19px;margin-left:auto;flex-shrink:0;accent-color:#10b981;cursor:pointer}
+.rest-button{padding:8px 11px;background:#1e293b;color:#e2e8f0;border-radius:8px;font-size:12px;font-weight:bold}
+.rest-button:hover{background:#334155}
+.hidden{display:none!important}
+@media(max-width:360px){.set-row{gap:5px;padding:6px 4px}.set-input{width:53px}.reps-input{width:48px}.set-label{width:34px}}
+</style>
+</head>
+<body class="min-h-screen pb-12">
+
+<header class="sticky top-0 z-40 border-b border-slate-800 bg-slate-900 shadow-lg">
+<div class="max-w-xl mx-auto p-4 flex items-center justify-between gap-3">
+<div>
+<h1 class="text-xl font-extrabold tracking-tight text-emerald-400">ANUBIS 2.0 EVO</h1>
+<p class="text-xs text-slate-400 mt-1">6-Day Synergy Split + Recovery</p>
+</div>
+<button type="button" onclick="clearAllLogs()" class="text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 font-semibold px-3 py-2 rounded-lg border border-rose-800">Reset Tracker</button>
+</div>
+</header>
+
+<main class="max-w-xl mx-auto p-4 space-y-4">
+
+<section class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+<div class="flex justify-between items-center gap-3">
+<div>
+<p class="text-xs uppercase tracking-wider text-slate-400">Workout Progress</p>
+<p id="progress-count" class="text-2xl font-bold text-emerald-400 mt-1">0 / 108 sets</p>
+</div>
+<div class="text-right">
+<p class="text-xs text-slate-400">Completion</p>
+<p id="progress-percent" class="text-xl font-bold">0%</p>
+</div>
+</div>
+<div class="w-full h-2 bg-slate-800 rounded-full mt-3 overflow-hidden">
+<div id="progress-bar" class="h-full bg-emerald-500 rounded-full transition-all duration-300" style="width:0%"></div>
+</div>
+<p class="text-xs text-slate-500 mt-3">Record your weight and reps, then check off each completed set. Your entries save automatically in this browser.</p>
+</section>
+
+<section id="timer-panel" class="hidden bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-xl" aria-live="polite">
+<div class="flex items-center justify-between gap-3">
+<div>
+<p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Rest Period</p>
+<p id="timer-exercise" class="text-sm text-slate-300 mt-1">Between sets</p>
+<p id="timer-display" class="text-4xl font-mono font-bold text-emerald-400 mt-1">01:30</p>
+</div>
+<div class="flex flex-col gap-2">
+<button type="button" id="timer-pause" onclick="toggleTimerPause()" class="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm">Pause</button>
+<button type="button" onclick="stopTimer()" class="bg-rose-950 hover:bg-rose-900 text-rose-300 px-4 py-2 rounded-lg text-sm">Skip</button>
+</div>
+</div>
+</section>
+
+<section class="bg-amber-950/30 border border-amber-900/60 rounded-xl p-4">
+<h2 class="text-sm font-bold text-amber-300">Training readiness</h2>
+<p class="text-xs text-slate-300 leading-relaxed mt-2">This tracker is not medical advice. If you are recovering from childbirth, pregnancy loss, surgery, or another medical event, obtain appropriate clinician clearance before strenuous exercise. Stop if you experience pain, dizziness, unusual bleeding, chest pain, or shortness of breath.</p>
+</section>
+
+<div id="workout-app" class="space-y-4"></div>
+
+<footer class="text-center text-xs text-slate-500 pt-4">Anubis 2.0 EVO · Workout Log<br>Progress is stored locally in this browser.</footer>
+</main>
+
+<script>
+"use strict";
+
+const programData = [
+{
+id:"day1",title:"Day 1: PUSH A",subtitle:"Chest / Shoulders / Triceps",emoji:"🔥",
+exercises:[
+{name:"A1: Smith Machine Flat Bench Press",target:"3 sets × 6–8 reps",id:"d1e1"},
+{name:"A2: Cable Face Pulls",target:"3 sets × 12–15 reps",id:"d1e2"},
+{name:"B1: Dumbbell Seated Shoulder Press",target:"3 sets × 8–10 reps",id:"d1e3"},
+{name:"B2: Cable Lateral Raises",target:"3 sets × 12–15 reps",id:"d1e4"},
+{name:"C1: Cable Tricep Pushdowns",target:"3 sets × 10–12 reps",id:"d1e5"},
+{name:"C2: Overhead Cable Tricep Extensions",target:"3 sets × 12 reps",id:"d1e6"}
+]},
+{
+id:"day2",title:"Day 2: PULL A",subtitle:"Back / Rear Delts / Biceps",emoji:"⚡",
+exercises:[
+{name:"A1: Cable Lat Pulldowns",target:"3 sets × 8–10 reps",id:"d2e1"},
+{name:"A2: Chest-Supported Dumbbell Rows",target:"3 sets × 10–12 reps",id:"d2e2"},
+{name:"B1: Smith Machine Shrugs",target:"3 sets × 10–12 reps",id:"d2e3"},
+{name:"B2: Cable Reverse Flies",target:"3 sets × 15 reps",id:"d2e4"},
+{name:"C1: Dumbbell Incline Bicep Curls",target:"3 sets × 10–12 reps",id:"d2e5"},
+{name:"C2: Cable Hammer Curls",target:"3 sets × 12–15 reps",id:"d2e6"}
+]},
+{
+id:"day3",title:"Day 3: LEGS & CORE A",subtitle:"Lower Body / Core",emoji:"🏋️",
+exercises:[
+{name:"A1: Smith Machine Squats",target:"3 sets × 6–8 reps",id:"d3e1"},
+{name:"A2: Hanging Leg Raises",target:"3 sets × controlled reps",id:"d3e2"},
+{name:"B1: Dumbbell Romanian Deadlifts",target:"3 sets × 8–10 reps",id:"d3e3"},
+{name:"B2: Standing Cable Calf Raises",target:"3 sets × 15–20 reps",id:"d3e4"},
+{name:"C1: Dumbbell Bulgarian Split Squats",target:"3 sets × 10 reps each leg",id:"d3e5"},
+{name:"C2: Cable Ab Crunches",target:"3 sets × 15 reps",id:"d3e6"}
+]},
+{
+id:"day4",title:"Day 4: PUSH B",subtitle:"Chest / Shoulders / Triceps",emoji:"💥",
+exercises:[
+{name:"A1: Smith Machine Incline Bench Press",target:"3 sets × 8–10 reps",id:"d4e1"},
+{name:"A2: Cable Face Pulls",target:"3 sets × 12–15 reps",id:"d4e2"},
+{name:"B1: Dumbbell Flat Flyes",target:"3 sets × 10–12 reps",id:"d4e3"},
+{name:"B2: Standing Dumbbell Lateral Raises",target:"3 sets × 12–15 reps",id:"d4e4"},
+{name:"C1: Cable Rope Overhead Tricep Extensions",target:"3 sets × 10–12 reps",id:"d4e5"},
+{name:"C2: Diamond Push-Ups or Single-Arm Cable Pushdowns",target:"3 sets × controlled reps",id:"d4e6"}
+]},
+{
+id:"day5",title:"Day 5: PULL B",subtitle:"Back Thickness / Width / Biceps",emoji:"👑",
+exercises:[
+{name:"A1: Cable Seated Row",target:"3 sets × 8–10 reps",id:"d5e1"},
+{name:"A2: Cable Straight-Arm Lat Pulldowns",target:"3 sets × 12 reps",id:"d5e2"},
+{name:"B1: Dumbbell Single-Arm Rows",target:"3 sets × 10 reps each arm",id:"d5e3"},
+{name:"B2: Dumbbell Rear Delt Flyes",target:"3 sets × 15 reps",id:"d5e4"},
+{name:"C1: Cable Bicep Curl (Straight Bar)",target:"3 sets × 10–12 reps",id:"d5e5"},
+{name:"C2: Dumbbell Hammer Curls",target:"3 sets × 12 reps",id:"d5e6"}
+]},
+{
+id:"day6",title:"Day 6: LEGS & CORE B",subtitle:"Posterior Chain / Core",emoji:"⚙️",
+exercises:[
+{name:"A1: Smith Machine Good Mornings or Sumo Squats",target:"3 sets × 8–10 reps",id:"d6e1"},
+{name:"A2: Cable Woodchoppers",target:"3 sets × 12 reps each side",id:"d6e2"},
+{name:"B1: Dumbbell Goblet Squats",target:"3 sets × 10–12 reps",id:"d6e3"},
+{name:"B2: Seated Cable Calf Raises",target:"3 sets × 15–20 reps",id:"d6e4"},
+{name:"C1: Cable Glute Pull-Throughs",target:"3 sets × 12 reps",id:"d6e5"},
+{name:"C2: RKC Plank Holds",target:"3 sets × 45-second holds",id:"d6e6"}
+]},
+{
+id:"day7",title:"Day 7: ACTIVE RECOVERY",subtitle:"Walking / Mobility / Rest",emoji:"🌱",isRecovery:true,
+protocols:[
+{title:"🚶 Zone 2 Walk",description:"Aim for an easy 20–45 minute walk, if appropriate for your current fitness and recovery. You should be able to speak comfortably."},
+{title:"🧘 Mobility and Stretching",description:"Spend 10–15 minutes on gentle, comfortable mobility work. Avoid forcing stretches or hanging movements that cause pain."},
+{title:"💧 Hydration and Recovery",description:"Drink fluids regularly, eat balanced meals, and prioritize sleep. Complete rest is also a valid recovery-day option."}
+]}
+];
+
+const STORAGE_PREFIX="anubisEvoTracker:";
+
+function storageKey(uid,field){
+return STORAGE_PREFIX+uid+":"+field;
+}
+
+function getSaved(uid,field){
+try{return localStorage.getItem(storageKey(uid,field))||"";}
+catch(error){return "";}
+}
+
+function setSaved(uid,field,value){
+try{localStorage.setItem(storageKey(uid,field),String(value));}
+catch(error){console.warn("Could not save workout data.",error);}
+}
+
+function initApp(){
+const container=document.getElementById("workout-app");
+container.innerHTML="";
+
+programData.forEach(day=>{
+const card=document.createElement("section");
+card.className="day-card";
+
+const header=document.createElement("button");
+header.type="button";
+header.className="day-header";
+header.setAttribute("aria-expanded","false");
+
+const titleGroup=document.createElement("div");
+titleGroup.className="flex items-center gap-3 min-w-0";
+
+const emoji=document.createElement("span");
+emoji.className="text-xl flex-shrink-0";
+emoji.textContent=day.emoji;
+
+const titleBox=document.createElement("div");
+titleBox.className="min-w-0";
+
+const title=document.createElement("h2");
+title.className="font-bold text-slate-200 text-sm sm:text-base";
+title.textContent=day.title;
+
+const subtitle=document.createElement("p");
+subtitle.className="text-xs text-slate-400 mt-1";
+subtitle.textContent=day.subtitle;
+
+titleBox.append(title,subtitle);
+titleGroup.append(emoji,titleBox);
+
+const arrow=document.createElement("span");
+arrow.className="text-xs text-slate-400 flex-shrink-0";
+arrow.textContent="▼ Expand";
+header.append(titleGroup,arrow);
+
+const body=document.createElement("div");
+body.className="day-body hidden";
+
+header.addEventListener("click",()=>{
+const opening=body.classList.contains("hidden");
+body.classList.toggle("hidden",!opening);
+header.setAttribute("aria-expanded",String(opening));
+arrow.textContent=opening?"▲ Collapse":"▼ Expand";
+});
+
+if(day.isRecovery){
+day.protocols.forEach(protocol=>{
+const item=document.createElement("article");
+item.className="p-3 mb-3 bg-slate-950/60 border border-slate-800 rounded-xl";
+
+const protocolTitle=document.createElement("h3");
+protocolTitle.className="font-bold text-emerald-400 text-sm mb-2";
+protocolTitle.textContent=protocol.title;
+
+const description=document.createElement("p");
+description.className="text-sm text-slate-300 leading-relaxed";
+description.textContent=protocol.description;
+
+item.append(protocolTitle,description);
+body.appendChild(item);
+});
+}else{
+day.exercises.forEach(ex=>{
+const exerciseCard=document.createElement("article");
+exerciseCard.className="exercise-card";
+
+const exerciseName=document.createElement("h3");
+exerciseName.className="text-sm font-bold text-emerald-400 leading-relaxed";
+exerciseName.textContent=ex.name;
+
+const target=document.createElement("p");
+target.className="text-xs text-slate-400 mt-1 mb-3";
+target.textContent=ex.target;
+
+const timerButton=document.createElement("button");
+timerButton.type="button";
+timerButton.className="rest-button mb-2";
+timerButton.textContent="⏱ Start 90s Rest";
+timerButton.addEventListener("click",()=>startTimer(ex.name));
+
+const columnLabels=document.createElement("div");
+columnLabels.className="flex items-center gap-2 px-2 mt-2 text-xs text-slate-500";
+
+const setHeading=document.createElement("span");
+setHeading.className="w-10";
+setHeading.textContent="Set";
+
+const weightHeading=document.createElement("span");
+weightHeading.className="w-[65px] text-center";
+weightHeading.textContent="Weight";
+
+const repsHeading=document.createElement("span");
+repsHeading.className="w-[58px] text-center";
+repsHeading.textContent="Reps";
+
+const doneHeading=document.createElement("span");
+doneHeading.className="ml-auto mr-1";
+doneHeading.textContent="Done";
+
+columnLabels.append(setHeading,weightHeading,repsHeading,doneHeading);
+exerciseCard.append(exerciseName,target,timerButton,columnLabels);
+
+for(let setNum=1;setNum<=3;setNum++){
+const uid=`${ex.id}-s${setNum}`;
+const savedWeight=getSaved(uid,"weight");
+const savedReps=getSaved(uid,"reps");
+const savedCheck=getSaved(uid,"done")==="true";
+
+const row=document.createElement("div");
+row.id=`row-${uid}`;
+row.className="set-row";
+if(savedCheck)row.classList.add("checked-row");
+
+const setLabel=document.createElement("span");
+setLabel.className="set-label";
+setLabel.textContent=`Set ${setNum}`;
+
+const weightInput=document.createElement("input");
+weightInput.type="number";
+weightInput.min="0";
+weightInput.step="0.5";
+weightInput.inputMode="decimal";
+weightInput.placeholder="lbs";
+weightInput.value=savedWeight;
+weightInput.id=`w-${uid}`;
+weightInput.className="set-input";
+weightInput.setAttribute("aria-label",`${ex.name}, set ${setNum}, weight in pounds`);
+
+const repsInput=document.createElement("input");
+repsInput.type="number";
+repsInput.min="0";
+repsInput.step="1";
+repsInput.inputMode="numeric";
+repsInput.placeholder="reps";
+repsInput.value=savedReps;
+repsInput.id=`r-${uid}`;
+repsInput.className="set-input reps-input";
+repsInput.setAttribute("aria-label",`${ex.name}, set ${setNum}, reps`);
+
+weightInput.addEventListener("input",()=>setSaved(uid,"weight",weightInput.value));
+repsInput.addEventListener("input",()=>setSaved(uid,"reps",repsInput.value));
+
+const checkbox=document.createElement("input");
+checkbox.type="checkbox";
+checkbox.id=`c-${uid}`;
+checkbox.className="set-check";
+checkbox.checked=savedCheck;
+checkbox.setAttribute("aria-label",`${ex.name}, set ${setNum} completed`);
+checkbox.addEventListener("change",()=>toggleCheck(uid));
+
+row.append(setLabel,weightInput,repsInput,checkbox);
+exerciseCard.appendChild(row);
+}
+
+body.appendChild(exerciseCard);
+});
+}
+
+card.append(header,body);
+container.appendChild(card);
+});
+
+updateProgress();
+}
+
+function toggleCheck(uid){
+const checkbox=document.getElementById(`c-${uid}`);
+const row=document.getElementById(`row-${uid}`);
+if(!checkbox||!row)return;
+setSaved(uid,"done",checkbox.checked);
+row.classList.toggle("checked-row",checkbox.checked);
+updateProgress();
+}
+
+function updateProgress(){
+let completed=0;
+let total=0;
+
+programData.forEach(day=>{
+if(day.isRecovery)return;
+day.exercises.forEach(ex=>{
+for(let setNum=1;setNum<=3;setNum++){
+total++;
+if(getSaved(`${ex.id}-s${setNum}`,"done")==="true")completed++;
+}
+});
+});
+
+const percent=total?Math.round(completed/total*100):0;
+document.getElementById("progress-count").textContent=`${completed} / ${total} sets`;
+document.getElementById("progress-percent").textContent=`${percent}%`;
+document.getElementById("progress-bar").style.width=`${percent}%`;
+}
+
+let timerInterval=null;
+let timerTimeout=null;
+let timeLeft=90;
+let timerPaused=false;
+
+function startTimer(exerciseName){
+stopTimer(false);
+timeLeft=90;
+timerPaused=false;
+
+const panel=document.getElementById("timer-panel");
+panel.classList.remove("hidden","bg-emerald-950/50","border-emerald-600");
+document.getElementById("timer-exercise").textContent=exerciseName;
+document.getElementById("timer-pause").textContent="Pause";
+updateTimerDisplay();
+timerInterval=setInterval(tickTimer,1000);
+panel.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function tickTimer(){
+if(timerPaused)return;
+timeLeft--;
+updateTimerDisplay();
+
+if(timeLeft<=0){
+clearInterval(timerInterval);
+timerInterval=null;
+
+const panel=document.getElementById("timer-panel");
+document.getElementById("timer-display").textContent="Time to Lift!";
+panel.classList.add("bg-emerald-950/50","border-emerald-600");
+
+if("vibrate" in navigator){
+try{navigator.vibrate(250);}catch(error){}
+}
+
+timerTimeout=setTimeout(()=>{
+panel.classList.add("hidden");
+panel.classList.remove("bg-emerald-950/50","border-emerald-600");
+},4000);
+}
+}
+
+function updateTimerDisplay(){
+const minutes=Math.floor(timeLeft/60);
+const seconds=timeLeft%60;
+document.getElementById("timer-display").textContent=
+`${String(minutes).padStart(2,"0")}:${String(seconds).padStart(2,"0")}`;
+}
+
+function toggleTimerPause(){
+if(!timerInterval&&timeLeft<=0)return;
+timerPaused=!timerPaused;
+document.getElementById("timer-pause").textContent=timerPaused?"Resume":"Pause";
+}
+
+function stopTimer(hidePanel=true){
+if(timerInterval!==null){
+clearInterval(timerInterval);
+timerInterval=null;
+}
+if(timerTimeout!==null){
+clearTimeout(timerTimeout);
+timerTimeout=null;
+}
+timerPaused=false;
+
+if(hidePanel){
+const panel=document.getElementById("timer-panel");
+panel.classList.add("hidden");
+panel.classList.remove("bg-emerald-950/50","border-emerald-600");
+}
+}
+
+function clearAllLogs(){
+const confirmed=confirm("Erase all saved weights, reps, and completed sets for this tracker? This cannot be undone.");
+if(!confirmed)return;
+
+try{
+const keysToRemove=[];
+for(let i=0;i<localStorage.length;i++){
+const key=localStorage.key(i);
+if(key&&key.startsWith(STORAGE_PREFIX))keysToRemove.push(key);
+}
+keysToRemove.forEach(key=>localStorage.removeItem(key));
+}catch(error){
+alert("The browser could not clear the saved workout data.");
+return;
+}
+
+stopTimer();
+initApp();
+}
+
+window.addEventListener("DOMContentLoaded",initApp);
+</script>
+</body>
+</html>
